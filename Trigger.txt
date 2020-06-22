@@ -1,0 +1,68 @@
+--DROP TABLE failure_record;
+CREATE TABLE failure_record(
+  sNo     varchar(6)   NOT NULL,
+  sName   varchar(20),
+  cNo     varchar(6)   NOT NULL,
+  cName   varchar(20),
+  score   int,
+  recordDate date      default current_date,
+  PRIMARY KEY(sNo,cNo),
+  FOREIGN KEY(sNo) references student(sNo),
+  FOREIGN KEY(cNo) references course(cNo)
+);
+
+--DROP FUNCTION failure_record();
+CREATE OR REPLACE FUNCTION failure_record() RETURNS trigger 
+AS $failure_record$
+BEGIN 
+  IF(TG_OP='INSERT') THEN
+    IF (NEW.score < 60 AND NOT EXISTS(select * from failure_record where sNo=NEW.sNo and cNo=NEW.cNo)) THEN 
+      insert into failure_record
+        (select NEW.sNo,s.sName,NEW.cNo,c.cName,NEW.score
+         from student s, course c
+         where s.sNo=NEW.sNo and c.cNo=NEW.cNo);
+    ELSE
+      update failure_record
+      set score=NEW.score
+      where sNo=NEW.sNo and cNo=NEW.cNo;
+    END IF;
+  END IF;  
+  IF(TG_OP='UPDATE') THEN 
+    CASE
+    WHEN(NEW.score >= 60 AND EXISTS(select * from failure_record where sNo=OLD.sNo and cNo=OLD.cNo)) THEN
+      delete from failure_record
+      where sNo=OLD.sNo and cNo=OLD.cNo;
+    WHEN (NEW.score < 60 AND NOT EXISTS(select * from failure_record where sNo=OLD.sNo and cNo=OLD.cNo)) THEN
+      insert into failure_record
+        (select OLD.sNo,s.sName,OLD.cNo,c.cName,NEW.score
+         from student s, course c
+         where s.sNo=OLD.sNo and c.cNo=OLD.cNo); 
+    WHEN(NEW.score < 60 AND EXISTS(select * from failure_record where sNo=OLD.sNo and cNo=OLD.cNo)) THEN
+          update failure_record
+          set score=NEW.score
+          where sNo=OLD.sNo and cNo=OLD.cNo;
+    END CASE;
+  END IF;  
+  IF(TG_OP='DELETE') THEN
+    IF (OLD.score < 60 AND EXISTS(select * from failure_record where sNo=OLD.sNo and cNo=OLD.cNo)) THEN
+      delete from failure_record
+      where sNo=OLD.sNo and cNo=OLD.cNo;
+    END IF;
+  END IF;  
+  RETURN NULL;
+END;
+$failure_record$ LANGUAGE plpgsql;
+
+--DROP TRIGGER failure_record ON sc;
+CREATE TRIGGER failure_record AFTER INSERT OR UPDATE OR DELETE ON sc
+    FOR EACH ROW EXECUTE PROCEDURE failure_record();
+
+--TEST
+insert into sc values('170403','040101',10,default);
+update sc set score=100 where sNo='170403' and cNo='040101';
+update sc set score=20 where sNo='170403' and cNo='040101';
+update sc set score=30 where sNo='170403' and cNo='040101';
+delete from failure_record where sNo='170403' and cNo='040101';
+
+
+

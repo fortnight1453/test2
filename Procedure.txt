@@ -1,0 +1,19 @@
+--DROP FUNCTION weighted_AVG(IN student.sNo%TYPE);
+
+CREATE OR REPLACE FUNCTION weighted_AVG(IN sNoIn student.sNo%TYPE) RETURNS NUMERIC 
+AS $weighted_AVG$
+DECLARE
+  weightedScore NUMERIC;
+BEGIN
+  SELECT CAST(SUM(CAST(score*credit AS NUMERIC))/SUM(credit) AS NUMERIC) INTO weightedScore
+  FROM sc, course c
+  where sc.cNo=c.cNo
+    and score is not null and credit is not null
+    and sc.sNo=sNoIn
+    group by sc.sNo;
+  RETURN weightedScore;
+END;
+$weighted_AVG$
+LANGUAGE plpgsql;
+
+select * from weighted_AVG('170101');
